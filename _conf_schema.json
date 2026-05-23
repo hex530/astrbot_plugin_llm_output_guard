@@ -1,0 +1,35 @@
+{
+  "limit": {
+    "description": "字数拦截阈值",
+    "type": "int",
+    "default": 100,
+    "hint": "超过此字数的消息将触发监工模型校验。"
+  },
+  "enable_group": {
+    "description": "是否在群聊中启用",
+    "type": "bool",
+    "default": true
+  },
+  "enable_private": {
+    "description": "是否在私聊中启用",
+    "type": "bool",
+    "default": false
+  },
+  "group_blacklist": {
+    "description": "群聊黑名单（不启用校验的群号，逗号分隔）",
+    "type": "string",
+    "default": ""
+  },
+  "monitor_model": {
+    "description": "监工模型名称（留空则使用默认模型）",
+    "type": "string",
+    "default": "",
+    "hint": "例如 gpt-4o。建议使用响应速度快的模型。"
+  },
+  "monitor_prompt": {
+    "description": "监工判定的 Prompt 模板",
+    "type": "string",
+    "default": "你是一个输出质量监工。以下是一段 AI 生成的回复内容：\n---内容开始---\n{text}\n---内容结束---\n你的任务：\n1. 判定这段内容是否为‘复读’、‘胡言乱语’或‘无意义的碎碎念’。\n2. 如果内容是在认真、详细地解答问题，请原样返回这段内容。\n3. 如果内容存在问题，请将其重写为一段简短、得体、高情商的回复（不超过 50 字）。\n请直接输出最终的回复内容，不要包含任何解释。",
+    "hint": "必须包含 {text} 变量。你可以根据需要调整判定标准。"
+  }
+}

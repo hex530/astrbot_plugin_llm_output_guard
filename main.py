@@ -1,12 +1,12 @@
-from astrbot.api.event import filter, AstrMessageEvent, MessageChain
+from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
-from astrbot.api.all import *
+from astrbot.api.message_components import Plain
 import logging
 import re
 
 logger = logging.getLogger("astrbot")
 
-@register("llm_output_guard", "夕小柠 & 陆渊", "高情商输出卫兵：双模型校验与自动重写。", "1.2.0")
+@register("llm_output_guard", "夕小柠 & 陆渊", "高情商输出卫兵：双模型校验与自动重写", "1.3.0")
 class LLMOutputGuard(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
@@ -19,13 +19,14 @@ class LLMOutputGuard(Star):
         enable_group = self.config.get("enable_group", True)
         enable_private = self.config.get("enable_private", False)
         
-        is_group = event.message_obj and event.message_obj.group_id
+        # 兼容性判定 group_id
+        is_group = event.message_obj.group_id if event.message_obj else None
         
         # 2. 场景开关判定
         if is_group:
             if not enable_group: return
-            blacklist = [x.strip() for x in self.config.get("group_blacklist", "").split(",") if x.strip()]
-            if str(event.message_obj.group_id) in blacklist: return
+            blacklist = [x.strip() for x in str(self.config.get("group_blacklist", "")).split(",") if x.strip()]
+            if str(is_group) in blacklist: return
         else:
             if not enable_private: return
 
@@ -34,10 +35,12 @@ class LLMOutputGuard(Star):
         if not chain: return
         text = chain.get_plain_text().strip()
         
-        # 无论字数多少，先处理 think 标签
+        # 🛡️ 无论字数多少，先处理 think 标签（防止思考过程泄露）
         if "<think>" in text.lower():
-            text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
-            event.set_result(MessageChain().plain(text))
+            text = re.sub(r'(?i)<think>.*?</think>', '', text, flags=re.DOTALL).strip()
+            # 如果切完后是空的，给个兜底
+            if not text: text = "..." 
+            event.set_result(event.make_result().plain(text))
 
         # 4. 字数拦截判定
         if len(text) <= limit:
@@ -61,13 +64,15 @@ class LLMOutputGuard(Star):
             system_prompt = self.config.get("monitor_prompt", default_prompt).format(text=text)
             
             model_id = self.config.get("monitor_model", "")
+            # 使用标准的 LLM 请求接口
             resp = await llm_service.request_llm(system_prompt, model_id=model_id if model_id else None)
-            final_text = resp.role_content.strip()
+            final_text = resp.completion_text.strip() # 修正字段为 completion_text
             
             if final_text:
-                event.set_result(MessageChain().plain(final_text))
+                event.set_result(event.make_result().plain(final_text))
                 logger.info("[OutputGuard] 校验完成，已应用重写/放行逻辑。")
             
         except Exception as e:
             logger.error(f"[OutputGuard] 监工校验出错: {e}")
-            event.set_result(MessageChain().plain(text[:limit] + "..."))
+            # 兜底：截断输出
+            event.set_result(event.make_result().plain(text[:limit] + "..."))
